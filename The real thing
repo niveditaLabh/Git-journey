@@ -1018,3 +1018,11 @@ if __name__ == "__main__":
     generator.export_animation_to_json(animation_data, "sign_language_animation.json")
     generator.export_animation_to_blender(animation_data, "sign_language_blender.py")
 
+opencv-python==4.8.1.78
+mediapipe==0.10.5
+numpy==1.24.3
+scipy==1.11.2
+matplotlib==3.7.2
+tensorflow==2.13.0
+scikit-learn==1.3.0
+pillow==10.0.0
