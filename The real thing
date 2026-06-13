@@ -253,6 +253,296 @@ class SignLanguageTranslator:
 
 
 def main():
+
+    """Main function to demonstrate the translator"""
+    translator = SignLanguageTranslator()
+    
+    print("=" * 50)
+    print("Sign Language Translator")
+    print("=" * 50)
+    print("\n1. Video to Text (Translate sign language to text)")
+    print("2. Text to Animation (Generate sign language animation)")
+    print("3. Exit")
+    
+    while True:
+        choice = input("\nSelect option (1/2/3): ").strip()
+        
+        if choice == "1":
+            print("\nStarting video recognition...")
+            print("Please show your hand gestures to the camera")
+            translator.video_to_text(video_source=0)
+            
+        elif choice == "2":
+            text_input = input("\nEnter text to convert to sign language: ").strip()
+            if text_input:
+                translator.text_to_animation(text_input)
+            else:
+                print("No text provided.")
+                
+        elif choice == "3":
+            print("Exiting...")
+            break
+        else:
+            print("Invalid option. Please try again.")
+
+
+if __name__ == "__main__":
+    main()
+"""
+Sign Language Translator
+Translates between sign language video and text using hand gesture recognition
+and generates 3D animations for sign language interpretation
+"""
+
+import cv2
+import numpy as np
+import mediapipe as mp
+from pathlib import Path
+import json
+from datetime import datetime
+
+class SignLanguageTranslator:
+    """Main class for sign language translation"""
+    
+    def __init__(self):
+        """Initialize the translator with necessary components"""
+        # MediaPipe for hand detection
+        self.mp_hands = mp.solutions.hands
+        self.mp_drawing = mp.solutions.drawing_utils
+        self.hands = self.mp_hands.Hands(
+            static_image_mode=False,
+            max_num_hands=2,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+        
+        # Load gesture dictionary
+        self.gesture_dict = self.load_gesture_dictionary()
+        self.gesture_sequence = []
+        self.frame_count = 0
+        
+    def load_gesture_dictionary(self):
+        """Load or create gesture to text mapping"""
+        gesture_file = Path("gestures.json")
+        
+        if gesture_file.exists():
+            with open(gesture_file, 'r') as f:
+                return json.load(f)
+        else:
+            # Default gesture mappings
+            return {
+                "open_palm": "hello",
+                "closed_fist": "goodbye",
+                "thumbs_up": "good",
+                "peace_sign": "peace",
+                "pointing": "you",
+                "hand_to_heart": "love",
+                "both_hands_together": "thank you",
+                "hand_wave": "wave",
+            }
+    
+    def extract_hand_landmarks(self, frame):
+        """Extract hand landmarks from a frame using MediaPipe"""
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = self.hands.process(rgb_frame)
+        
+        landmarks_data = []
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                landmarks = []
+                for landmark in hand_landmarks.landmark:
+                    landmarks.append([landmark.x, landmark.y, landmark.z])
+                landmarks_data.append(np.array(landmarks))
+        
+        return landmarks_data, results
+    
+    def recognize_gesture(self, landmarks):
+        """Recognize gesture from hand landmarks"""
+        if not landmarks:
+            return None
+        
+        # Get the first hand (primary hand)
+        hand_landmarks = landmarks[0]
+        
+        # Calculate key distances and angles for gesture recognition
+        thumb_tip = hand_landmarks[4]
+        index_tip = hand_landmarks[8]
+        middle_tip = hand_landmarks[12]
+        ring_tip = hand_landmarks[16]
+        pinky_tip = hand_landmarks[20]
+        palm_center = hand_landmarks[0]
+        
+        # Simple gesture recognition based on finger positions
+        gesture = self._classify_gesture(
+            thumb_tip, index_tip, middle_tip, ring_tip, pinky_tip, palm_center
+        )
+        
+        return gesture
+    
+    def _classify_gesture(self, thumb, index, middle, ring, pinky, palm):
+        """Classify gesture based on finger positions"""
+        # Calculate distances from palm center
+        def distance(p1, p2):
+            return np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 + (p1[2] - p2[2])**2)
+        
+        thumb_dist = distance(thumb, palm)
+        index_dist = distance(index, palm)
+        middle_dist = distance(middle, palm)
+        ring_dist = distance(ring, palm)
+        pinky_dist = distance(pinky, palm)
+        
+        # Simple heuristics for gesture classification
+        open_fingers = sum([
+            index_dist > 0.1,
+            middle_dist > 0.1,
+            ring_dist > 0.1,
+            pinky_dist > 0.1
+        ])
+        
+        if open_fingers >= 3:
+            return "open_palm"
+        elif open_fingers == 0:
+            return "closed_fist"
+        elif open_fingers == 2 and index_dist > 0.12 and middle_dist > 0.12:
+            return "peace_sign"
+        else:
+            return "hand_pose"
+    
+    def video_to_text(self, video_source=0, output_file="translation_output.txt"):
+        """
+        Translate video from camera or file to text
+        video_source: 0 for webcam, or path to video file
+        """
+        cap = cv2.VideoCapture(video_source)
+        recognized_text = []
+        frame_buffer = []
+        
+        print("Press 'q' to stop recording and translate")
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            # Flip the frame for selfie view
+            frame = cv2.flip(frame, 1)
+            
+            # Extract landmarks
+            landmarks, results = self.extract_hand_landmarks(frame)
+            
+            # Recognize gesture
+            if landmarks:
+                gesture = self.recognize_gesture(landmarks)
+                if gesture:
+                    self.gesture_sequence.append(gesture)
+                    if len(self.gesture_sequence) > 10:
+                        self.gesture_sequence.pop(0)
+                    
+                    # Draw hand landmarks
+                    for hand_landmarks in results.multi_hand_landmarks:
+                        self.mp_drawing.draw_landmarks(
+                            frame,
+                            hand_landmarks,
+                            self.mp_hands.HAND_CONNECTIONS
+                        )
+            
+            # Display info on frame
+            cv2.putText(frame, f"Gesture: {gesture if landmarks else 'None'}", 
+                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(frame, f"Sequence: {len(self.gesture_sequence)}", 
+                       (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            
+            cv2.imshow('Sign Language Recognition', frame)
+            frame_buffer.append(frame)
+            
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        
+        cap.release()
+        cv2.destroyAllWindows()
+        
+        # Convert gesture sequence to text
+        translated_text = self._sequence_to_text(self.gesture_sequence)
+        
+        # Save output
+        with open(output_file, 'w') as f:
+            f.write(f"Translation: {translated_text}\n")
+            f.write(f"Timestamp: {datetime.now()}\n")
+            f.write(f"Gesture Sequence: {self.gesture_sequence}\n")
+        
+        print(f"Translation: {translated_text}")
+        return translated_text
+    
+    def _sequence_to_text(self, gesture_sequence):
+        """Convert gesture sequence to text"""
+        text_parts = []
+        for gesture in gesture_sequence:
+            if gesture in self.gesture_dict:
+                text_parts.append(self.gesture_dict[gesture])
+        
+        return " ".join(text_parts) if text_parts else "No gestures recognized"
+    
+    def text_to_animation(self, text, output_video="sign_language_output.mp4"):
+        """
+        Convert text to sign language animation
+        This is a placeholder - actual 3D animation generation would require
+        more complex libraries like Blender API or specialized sign language models
+        """
+        print(f"\nGenerating sign language animation for: '{text}'")
+        
+        # Split text into words
+        words = text.lower().split()
+        
+        # Find corresponding gestures
+        animation_sequence = []
+        for word in words:
+            gesture = self._find_gesture_for_word(word)
+            animation_sequence.append({
+                'word': word,
+                'gesture': gesture,
+                'duration': 2.0  # seconds
+            })
+        
+        print("\nAnimation Sequence:")
+        for item in animation_sequence:
+            print(f"  Word: '{item['word']}' -> Gesture: '{item['gesture']}'")
+        
+        # Save animation info
+        with open("animation_sequence.json", 'w') as f:
+            json.dump(animation_sequence, f, indent=2)
+        
+        print(f"\nAnimation sequence saved to animation_sequence.json")
+        print(f"Total duration: {sum(item['duration'] for item in animation_sequence)} seconds")
+        print("\nNote: Actual 3D animation rendering requires additional libraries")
+        print("Consider using: Blender Python API, Three.js, or specialized sign language datasets")
+        
+        return animation_sequence
+    
+    def _find_gesture_for_word(self, word):
+        """Find gesture for a given word"""
+        # Simple word-to-gesture mapping
+        word_gesture_map = {
+            "hello": "open_palm",
+            "hi": "hand_wave",
+            "goodbye": "closed_fist",
+            "bye": "hand_wave",
+            "good": "thumbs_up",
+            "peace": "peace_sign",
+            "thank": "both_hands_together",
+            "you": "pointing",
+            "love": "hand_to_heart",
+            "thank you": "both_hands_together",
+        }
+        
+        # Check for exact match or partial match
+        for key, gesture in word_gesture_map.items():
+            if key in word or word in key:
+                return gesture
+        
+        return "hand_pose"  # Default gesture
+
+
+def main():
     """Main function to demonstrate the translator"""
     translator = SignLanguageTranslator()
     
