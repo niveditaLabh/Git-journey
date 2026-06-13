@@ -1026,3 +1026,15 @@ matplotlib==3.7.2
 tensorflow==2.13.0
 scikit-learn==1.3.0
 pillow==10.0.0
+
+Gesture	Meaning	Hand Shape
+hello|Hello/Hi|Open palm, waving motion|
+goodbye	Goodbye/Bye|Open palm, waving (right)|
+thank_you	Thank You|Open hands, moving up-down|
+love	Love/Heart|Both hands forming heart|
+yes	Yes/Agreement|Thumbs up with nodding|
+no	No/Disagreement|Open hand with shaking|
+peace	Peace|V-shaped fingers
+good	Good|Thumbs up|
+bad	Bad|Thumbs down|
+help	Help|Both hands reaching up|
