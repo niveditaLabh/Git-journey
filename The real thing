@@ -1038,3 +1038,14 @@ peace	Peace|V-shaped fingers
 good	Good|Thumbs up|
 bad	Bad|Thumbs down|
 help	Help|Both hands reaching up|
+
+from gesture_recognition_advanced import GestureRecognitionML
+
+ml_recognizer = GestureRecognitionML()
+
+# Extract features from landmarks
+features = ml_recognizer.extract_features(hand_landmarks)
+
+# Predict gesture
+gesture, confidence = ml_recognizer.predict_gesture(hand_landmarks)
+print(f"Recognized: {gesture} (Confidence: {confidence:.2%})")
